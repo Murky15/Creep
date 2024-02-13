@@ -38,7 +38,7 @@ struct GameHandle
   u64 dllLastWriteTime;
 
   void *handle;
-  GameInitFunc *init;
+  GameLoadedFunc *onLoad;
   GameTickFunc *tick;
 };
 
@@ -144,9 +144,9 @@ GetGameHandle(String8 source, String8 temp)
   OSCopyFile((char*)source.str, (char*)temp.str);
   result.handle = SDL_LoadObject((char*)temp.str);
   if (result.handle) {
-    result.init = (GameInitFunc*)SDL_LoadFunction(result.handle, "GameInit");
+    result.onLoad = (GameLoadedFunc*)SDL_LoadFunction(result.handle, "GameLoaded");
     result.tick = (GameTickFunc*)SDL_LoadFunction(result.handle, "GameTick");
-    result.valid = (result.init && result.tick);
+    result.valid = (result.onLoad && result.tick);
   }
   DebugPrint(Str8Lit("Loaded game code!\n"));
 
@@ -209,7 +209,7 @@ main(void)
     DebugPrint(Str8Lit("Unable to load game code!\n"));
     return 1;
   }
-  game.init(gameMemory);
+  game.onLoad(true, gameMemory);
 
   for (;!app.terminated;) {
 
@@ -217,6 +217,7 @@ main(void)
     if (newWriteTime != game.dllLastWriteTime) {
       ReleaseGameHandle(&game);
       game = GetGameHandle(srcPathString, tmpPathString);
+      game.onLoad(false, gameMemory);
     }
 
     // Poll events

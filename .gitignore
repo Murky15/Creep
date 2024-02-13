@@ -1,1 +1,4 @@
+code/libs/SDL2
+code/libs/Steamworks
 build/
+data/

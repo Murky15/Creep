@@ -14,7 +14,7 @@ target:
 
 breakpoint:
 {
-  line: ("../code/game.c":74)
+  line: ("../code/game.c":53)
   enabled: 1
 }
 

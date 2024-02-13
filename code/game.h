@@ -61,7 +61,7 @@ struct GamePayload
 };
 
 // Game function vtable
-typedef void GameInitFunc(GameMemory);
+typedef void GameLoadedFunc(b32, GameMemory);
 typedef void GameTickFunc(GamePayload*);
 
 #endif // GAME_H
