@@ -10,6 +10,14 @@ target:
   active:            1
 }
 
+/// breakpoints ///////////////////////////////////////////////////////////////
+
+breakpoint:
+{
+  line: ("../code/game.c":74)
+  enabled: 1
+}
+
 /// exception code filters ////////////////////////////////////////////////////
 
 exception_code_filters:

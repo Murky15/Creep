@@ -57,18 +57,11 @@ typedef struct GamePayload GamePayload;
 struct GamePayload
 {
   GameMemory memory;
-  Bitmap framebuffer;
   GameInput input;
 };
 
 // Game function vtable
-typedef void GameInitFunc(void);
+typedef void GameInitFunc(GameMemory);
 typedef void GameTickFunc(GamePayload*);
-
-typedef struct Game Game;
-struct Game
-{
-  u8 xOffset, yOffset;
-};
 
 #endif // GAME_H

@@ -1,4 +1,4 @@
-#ifndef STRINGS_H 
+#ifndef STRINGS_H
 #define STRINGS_H
 // This would not be possible without Allen 4th and Ryan Fleury
 
@@ -79,9 +79,9 @@ CharIsNumeric(u8 c)
 function inline b32
 CharIsSymbol(u8 c)
 {
-  return (c >= '!' && c <= '/') || 
-    (c >= ':' && c <= '@') || 
-    (c >= '[' && c <= '`') || 
+  return (c >= '!' && c <= '/') ||
+    (c >= ':' && c <= '@') ||
+    (c >= '[' && c <= '`') ||
     (c >= '{' && c <= '~');
 }
 
@@ -109,7 +109,7 @@ CharToForwardSlash(u8 c)
     return c == '\\' ? '/' : c;
 }
 
-function u64 CStringLength(char *str);
+function u64 CStringLength(const char *str);
 
 // String functions
 

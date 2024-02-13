@@ -1,5 +1,9 @@
 /*
   TODO:
+  -  Fix hot reload with Sokol
+  -  Fixed point implementation
+  -  Image loading
+  -  TTF parsing & font baking
   -  Steamworks API (need to compile separate TU)
 */
 
@@ -9,67 +13,85 @@
 #include "game.h"
 
 // Source
-// #define STB_IMAGE_IMPLEMENTATION
-// #define STB_TRUETYPE_IMPLEMENTATION
-// #include <stb/stb_image.h>
-// #include <stb/stb_truetype.h>
+#define SOKOL_IMPL
+#define SOKOL_GLCORE33
+#include <sokol/sokol_gfx.h>
+#include <sokol/sokol_gp.h>
+
 #define STB_SPRINTF_IMPLEMENTATION
 #include <stb/stb_sprintf.h>
+
+#define NK_IMPLEMENTATION
+#define NK_PRIVATE
+#define NK_INCLUDE_FIXED_TYPES
+#define NK_INCLUDE_DEFAULT_FONT
+#define NK_ASSERT Assert
+#include <nuklear.h>
 
 #define HANDMADE_MATH_NO_SSE
 #include <HandmadeMath.h>
 
 #include "base/base_include.c"
 
-#if NO_CRT
-#include <windows.h>
-// Um... can we do this?
-BOOL WINAPI DllMain (
-    HINSTANCE const instance,  // handle to DLL module
-    DWORD     const reason,    // reason for calling function
-    LPVOID    const reserved)  // reserved
+#define GAME_DATA_SIZE Kilobytes(4)
+typedef struct Game Game;
+struct Game
 {
-    Unused(instance && reason && reserved);
-    return TRUE;  // Successful DLL_PROCESS_ATTACH.
-}
-#endif
+  Arena *permArena;
+  Arena *frameArena;
+};
 
-function void
-RenderTestGradient(Bitmap bitmap, u8 xOffset, u8 yOffset)
-{
-  for (u32 y = 0; y < bitmap.height; ++y) {
-    for (u32 x = 0; x < bitmap.width; ++x) {
-      u8 red = x + xOffset;
-      u8 green = y + yOffset;
-      u8 blue = 0;
-      ((u32*)bitmap.pixels)[y * bitmap.width + x] = (red << 16 | green << 8 | blue);
-    }
-  }
-}
-
-function void
-RenderTestScene(Bitmap bitmap)
-{
-  Unused(bitmap);
-}
-
+StaticAssert(sizeof(Game) <= GAME_DATA_SIZE, check_game_size);
 extern void
-GameInit(void)
+GameInit(GameMemory memory)
 {
-  // It's quiet here... (Do I even need this?)
+  Assert(memory.mem && GAME_DATA_SIZE < memory.size);
+  Game *game = (Game*)memory.mem;
+
+  // Memory management
+  u64 arenaSize = memory.size / 2; // TODO: Should we divide this differently?
+  void *permArenaMemory = (u8*)memory.mem + GAME_DATA_SIZE;
+  void *frameArenaMemory = (u8*)permArenaMemory + arenaSize;
+  game->permArena = ArenaAlloc(permArenaMemory, arenaSize);
+  game->frameArena = ArenaAlloc(frameArenaMemory, arenaSize);
+
+  // Init sokol_gfx
+  sg_desc sgDesc = {0};
+  sgp_desc sgpDesc = {0};
+  sg_setup(&sgDesc);
+  sgp_setup(&sgpDesc);
 }
 
 extern void
 GameTick(GamePayload *payload)
 {
   Game *gameState = (Game*)payload->memory.mem;
+
   GameInput input = payload->input;
-
   GameInputSource *keyboard = &input.sources[0];
+  Unused(gameState && keyboard);
 
-  gameState->xOffset += (keyboard->xAxis * 3);
-  gameState->yOffset += (keyboard->yAxis * 3);
+  int width = 800, height = 600; // TODO: Recieve this from platform layer
+  f32 ratio = width / (f32)height;
 
-  RenderTestGradient(payload->framebuffer, gameState->xOffset, gameState->yOffset);
-  // RenderTestScene(bitmap);
+  // Initialize
+  sgp_begin(width, height);
+  sgp_viewport(0, 0, width, height);
+  sgp_project(-ratio, ratio, 1.f, -1.f);
+
+  // Clear frame buffer
+  sgp_set_color(0.1f, 0.1f, 0.1f, 1.f);
+  sgp_clear();
+
+  // Draw
+  sgp_set_color(1.f, 1.f, 1.f, 1.f);
+  sgp_draw_filled_rect(-0.5f, -0.5f, 1.f, 1.f);
+
+  // Present
+  sg_pass_action pass = {0};
+  sg_begin_default_pass(&pass, width, height);
+  sgp_flush();
+  sgp_end();
+  sg_end_pass();
+  sg_commit();
 }

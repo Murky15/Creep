@@ -1,7 +1,7 @@
 #ifndef COMMON_H
 #define COMMON_H
 
-#if NO_CRT && BUILD_INTERNAL
+#if NO_CRT && _DEBUG
 int _fltused;
 
 void *
@@ -74,7 +74,7 @@ typedef double f64;
 # error "Thread local storage not implemented for this compiler!"
 #endif
 
-#if BUILD_SLOW
+#if _DEBUG
 # define Assert(c) if (!(c)) {*(int*)0 = 0;}
 # define StaticAssert(c, label) u8 static_assert_##label[(c)?(1):(-1)]
 #else
