@@ -11,21 +11,21 @@ set defines=-DCOMPILER_MSVC=1 -D_DEBUG=1
 set debug=-FC -Zi
 
 :: Platform specific opts
-set platform_includes=-I%lib_dir% -I%lib_dir%\SDL2\include
-set platform_libs=%lib_dir%\SDL2\lib\x64\SDL2.lib %lib_dir%\SDL2\lib\x64\SDL2.lib shell32.lib
+set platform_includes=-I%lib_dir%
+set platform_libs=shell32.lib user32.lib gdi32.lib opengl32.lib
 
 :: Game specific opts
-set game_includes=-I%lib_dir% -I%lib_dir%\Steamworks\sdk\public\
-set game_libs=-I%lib_dir%\Steamworks\sdk\redistributable_bin\win64\steam_api64.lib
+set game_includes=-I%lib_dir%
+set game_libs=opengl32.lib
 
 :: Common linker opts
 set link=-opt:ref -incremental:no
 
 :: Platform linker opts
-set platform_link=-subsystem:windows -entry:mainCRTStartup
+set platform_link=-subsystem:windows
 
 :: DLL linker opts
-set dll_link=-EXPORT:GameLoaded -EXPORT:GameTick
+set dll_link=-EXPORT:Load -EXPORT:Update -EXPORT:Render
 
 if not exist build mkdir build
 pushd build
@@ -35,6 +35,6 @@ echo Compiling game DLL
 cl %compiler% %defines% %debug% %game_includes% %code_dir%\game.c -LD %game_libs% /link %link% %dll_link%
 
 echo Compiling platform executable
-cl %compiler% -DOS_WINDOWS=1 %defines% %debug% %platform_includes% %code_dir%\platform_sdl.c %platform_libs% -Feplatform /link %link% %platform_link%
+cl %compiler% -DOS_WINDOWS=1 %defines% %debug% %platform_includes% %code_dir%\platform_windows.c %platform_libs% -Feplatform /link %link% %platform_link%
 
 popd

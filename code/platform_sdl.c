@@ -13,7 +13,7 @@
 #include <SDL_opengl.h>
 
 #include "base/base_include.h"
-#include "os/os.h"
+// #include "os/os.h"
 #include "game.h"
 
 // Source
@@ -38,8 +38,9 @@ struct GameHandle
   u64 dllLastWriteTime;
 
   void *handle;
-  GameLoadedFunc *onLoad;
-  GameTickFunc *tick;
+  #define X(ret, name, ...) Game##name##Func *name;
+  GAME_VTABLE
+  #undef X
 };
 
 typedef struct PlatformState PlatformState;
@@ -101,7 +102,7 @@ PlatformInit(void)
       SDL_WINDOWPOS_UNDEFINED,
       SDL_WINDOWPOS_UNDEFINED,
       windowWidth, windowHeight,
-      SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL);
+      SDL_WINDOW_OPENGL);
     if (window != 0) {
       SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
       SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
@@ -144,9 +145,11 @@ GetGameHandle(String8 source, String8 temp)
   OSCopyFile((char*)source.str, (char*)temp.str);
   result.handle = SDL_LoadObject((char*)temp.str);
   if (result.handle) {
-    result.onLoad = (GameLoadedFunc*)SDL_LoadFunction(result.handle, "GameLoaded");
-    result.tick = (GameTickFunc*)SDL_LoadFunction(result.handle, "GameTick");
-    result.valid = (result.onLoad && result.tick);
+    #define X(ret, name, ...) \
+    result.name = (Game##name##Func*)SDL_LoadFunction(result.handle, #name); \
+    result.valid = (result.name != 0);
+    GAME_VTABLE
+    #undef X
   }
   DebugPrint(Str8Lit("Loaded game code!\n"));
 
@@ -209,15 +212,14 @@ main(void)
     DebugPrint(Str8Lit("Unable to load game code!\n"));
     return 1;
   }
-  game.onLoad(true, gameMemory);
+  game.Load(true, gameMemory);
 
   for (;!app.terminated;) {
-
     u64 newWriteTime = OSGetLastWriteTime(srcPathString);
     if (newWriteTime != game.dllLastWriteTime) {
       ReleaseGameHandle(&game);
       game = GetGameHandle(srcPathString, tmpPathString);
-      game.onLoad(false, gameMemory);
+      game.Load(false, gameMemory);
     }
 
     // Poll events
@@ -232,11 +234,11 @@ main(void)
             switch (keyEvent->keysym.sym) {
               // TODO: Pretty hacky?
               case SDLK_UP: fallthrough
-              case SDLK_w: if (isDown) --keyboard->yAxis; else ++keyboard->yAxis; break;
+              case SDLK_w: if (isDown) ++keyboard->yAxis; else --keyboard->yAxis; break;
               case SDLK_LEFT: fallthrough
               case SDLK_a: if (isDown) --keyboard->xAxis; else ++keyboard->xAxis; break;
               case SDLK_DOWN: fallthrough
-              case SDLK_s: if (isDown) ++keyboard->yAxis; else --keyboard->yAxis; break;
+              case SDLK_s: if (isDown) --keyboard->yAxis; else ++keyboard->yAxis; break;
               case SDLK_RIGHT: fallthrough
               case SDLK_d: if (isDown) ++keyboard->xAxis; else --keyboard->xAxis; break;
 
@@ -255,7 +257,8 @@ main(void)
     }
 
     payload.input = *newInput;
-    game.tick(&payload);
+    game.Update(&payload);
+    game.Render(&payload);
 
     // Present renderer
     SDL_GL_SwapWindow(app.window);

@@ -14,7 +14,7 @@ target:
 
 breakpoint:
 {
-  line: ("../code/game.c":53)
+  line: ("../code/platform_windows.c":147)
   enabled: 1
 }
 

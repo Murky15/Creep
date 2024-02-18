@@ -37,15 +37,6 @@ struct GameInput
   GameInputSource sources[NUM_INPUT_SOURCES]; // Treat source 0 as keyboard
 };
 
-typedef struct Bitmap Bitmap;
-struct Bitmap
-{
-  u32 width, height;
-  u32 bytesPerPixel;
-  u32 pitch;
-  void *pixels;
-};
-
 typedef struct GameMemory GameMemory;
 struct GameMemory
 {
@@ -53,15 +44,15 @@ struct GameMemory
   u64 size;
 };
 
-typedef struct GamePayload GamePayload;
-struct GamePayload
-{
-  GameMemory memory;
-  GameInput input;
-};
+// Game function vtable,
+// (return, name, params...)
+#define GAME_VTABLE \
+  X(void, Load, b32, GameMemory) \
+  X(void, Update, GameMemory, GameInput) \
+  X(void, Render, GameMemory, u64, u64) \
 
-// Game function vtable
-typedef void GameLoadedFunc(b32, GameMemory);
-typedef void GameTickFunc(GamePayload*);
+#define X(ret, name, ...) typedef ret Game##name##Func(__VA_ARGS__);
+GAME_VTABLE
+#undef X
 
 #endif // GAME_H

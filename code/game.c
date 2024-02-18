@@ -20,7 +20,9 @@
 #include <sokol/sokol_gp.h>
 
 #define STB_SPRINTF_IMPLEMENTATION
+#define STB_IMAGE_IMPLEMENTATION
 #include <stb/stb_sprintf.h>
+#include <stb/stb_image.h>
 
 #define NK_IMPLEMENTATION
 #define NK_PRIVATE
@@ -42,6 +44,9 @@ struct Game
   Arena *permArena;
   Arena *frameArena;
 
+  // Misc
+  f32 playerX, playerY;
+
   // Sokol handles
   _sg_state_t *sgState;
   _sgp_context *sgpState;
@@ -49,7 +54,7 @@ struct Game
 
 StaticAssert(sizeof(Game) <= GAME_DATA_SIZE, check_game_size);
 extern void
-GameLoaded(b32 first, GameMemory memory)
+Load(b32 first, GameMemory memory)
 {
   Assert(memory.mem && GAME_DATA_SIZE < memory.size);
   Game *game = (Game*)memory.mem;
@@ -85,22 +90,25 @@ GameLoaded(b32 first, GameMemory memory)
 }
 
 extern void
-GameTick(GamePayload *payload)
+Update(GameMemory memory, GameInput input)
 {
-  Game *gameState = (Game*)payload->memory.mem;
-
-  GameInput input = payload->input;
+  Game *gameState = (Game*)memory.mem;
   GameInputSource *keyboard = &input.sources[0];
-  Unused(gameState && keyboard);
 
-  int width = 800, height = 600; // TODO: Recieve this from platform layer
-  f32 ratio = width / (f32)height;
-  Unused(ratio);
+  gameState->playerX += (keyboard->xAxis * 0.5f);
+  gameState->playerY += (keyboard->yAxis * 0.5f);
+}
+
+extern void
+Render(GameMemory memory, u64 frameWidth, u64 frameHeight)
+{
+  Game *gameState = (Game*)memory.mem;
 
   // Initialize
-  sgp_begin(width, height);
-  sgp_viewport(0, 0, width, height);
-  sgp_project(0, 500, 500, 0);
+  // TODO: Figure out scaling and stuff
+  sgp_begin(frameWidth, frameHeight);
+  sgp_viewport(0, 0, frameWidth, frameHeight);
+  sgp_project(0, 800, 600, 0);
 
   // Clear frame buffer
   sgp_set_color(0.1f, 0.1f, 0.1f, 1.f);
@@ -108,11 +116,11 @@ GameTick(GamePayload *payload)
 
   // Draw
   sgp_set_color(1.f, 0.f, 0.f, 1.f);
-  sgp_draw_filled_rect(0, 0, 100.f, 100.f);
+  sgp_draw_filled_rect(gameState->playerX, gameState->playerY, 100.f, 100.f);
 
   // Present
   sg_pass_action pass = {0};
-  sg_begin_default_pass(&pass, width, height);
+  sg_begin_default_pass(&pass, frameWidth, frameHeight);
   sgp_flush();
   sgp_end();
   sg_end_pass();

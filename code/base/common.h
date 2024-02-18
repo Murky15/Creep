@@ -132,9 +132,9 @@ typedef double f64;
 ((n)->next=(f),(f)=(n)))
 
 #define SLLQueuePop_N(f, l, next) \
-((f)==(l)?\
-(f)=(l)=0:\
-(f)=(f)->next)
+(((f)==(l))?\
+((f)=(l)=0):\
+((f)=(f)->next))
 
 #define SLLQueuePush(f, l, n) SLLQueuePush_N(f, l, n, next)
 #define SLLQueuePushFront(f, l, n) SLLQueuePushFront_N(f, l, n, next)

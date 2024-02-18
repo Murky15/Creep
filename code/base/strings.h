@@ -137,7 +137,6 @@ function b32 Str8Match(String8 a, String8 b, StringMatchFlags matchFlags);
 function String8 PushStr8Copy(Arena *arena, String8 string);
 function String8 PushStr8FV(Arena *arena, char *fmt, va_list args);
 function String8 PushStr8F(Arena *arena, char *fmt, ...);
-#define Str8VArg(s) (int)(s).size, (s).str
 
 // Lists
 function void Str8ListPushNode(String8List *list, String8Node *node);
