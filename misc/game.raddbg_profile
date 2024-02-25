@@ -14,8 +14,8 @@ target:
 
 breakpoint:
 {
-  line: ("../code/platform_windows.c":147)
-  enabled: 1
+  line: ("../code/platform_windows.c":284)
+  enabled: 0
 }
 
 /// exception code filters ////////////////////////////////////////////////////

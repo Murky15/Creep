@@ -44,10 +44,28 @@ struct GameMemory
   u64 size;
 };
 
-// Game function vtable,
+// Function vtables (for communication between game and platform layer)
 // (return, name, params...)
+
+// Platform
+#define PLATFORM_VTABLE \
+  X(void, DebugPrint, String8) \
+
+#define X(ret, name, ...) typedef ret Platform##name##Func(__VA_ARGS__);
+PLATFORM_VTABLE
+#undef X
+
+typedef struct PlatformAPI PlatformAPI;
+struct PlatformAPI
+{
+  #define X(ret, name, ...) Platform##name##Func *name;
+  PLATFORM_VTABLE
+  #undef X
+};
+
+// Game
 #define GAME_VTABLE \
-  X(void, Load, b32, GameMemory) \
+  X(void, Load, b32, PlatformAPI, GameMemory) \
   X(void, Update, GameMemory, GameInput) \
   X(void, Render, GameMemory, u64, u64) \
 

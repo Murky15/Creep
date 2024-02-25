@@ -6,7 +6,7 @@ set code_dir=..\code
 set lib_dir=..\code\libs
 
 :: Build opts
-set compiler=-Od -nologo -std:c11 -W4 -WX -wd4244 -wd4042 -wd4267 -wd4456 -wd4127 -wd4116
+set compiler=-Od -nologo -std:c11 -W4 -WX -wd4244 -wd4042 -wd4267 -wd4456 -wd4127 -wd4116 -wd4090
 set defines=-DCOMPILER_MSVC=1 -D_DEBUG=1
 set debug=-FC -Zi
 

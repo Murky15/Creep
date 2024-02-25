@@ -156,7 +156,7 @@ typedef double f64;
 #define Max(a, b) (((a)>(b)) ? (a) : (b))
 #define ClampTop(x, a) Min(x,a)
 #define ClampBot(a, x) Max(a,x)
-#define Clamp(a, x, b) (((a)>(x))?(a):((b)<(x))?(b):(x))
+#define Clamp(x, low, high) (((x) > (high)) ? (high) : (((x) < (low)) ? (low) : (x)))
 
 #define ArrayCount(a) (sizeof((a)) / sizeof((a)[0]))
 #define IntFromPtr(p) (u64)(((u8 *)p) - 0)

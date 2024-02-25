@@ -1,5 +1,7 @@
 // Headers
 #include <windows.h>
+#include <gl/gl.h>
+#include <wglext.h>
 #include "base/base_include.h"
 #include "game.h"
 
@@ -32,17 +34,22 @@ struct Win32State
   Win32Window window;
   HDC dc;
   HGLRC glContext;
+  u64 perfFrequency;
 };
 
 global Win32State globalState;
 global b32 globalGameRunning = true;
 global GameInput globalGameInput[2];
 
-function void
+// Public API
+
+extern void
 DebugPrint(String8 msg)
 {
   OutputDebugString((LPCSTR)msg.str);
 }
+
+// Internal functions
 
 function void
 Win32CopyFile(char *src, char *dest)
@@ -122,14 +129,11 @@ Win32WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
       b32 wasDown = ((lParam & (1 << 30)) != 0);
       if (isDown != wasDown) {
         switch (wParam) {
-          case VK_UP: fallthrough
-          case 'W': if (isDown) ++keyboard->yAxis; else --keyboard->yAxis; break;
-          case VK_LEFT: fallthrough
-          case 'A': if (isDown) --keyboard->xAxis; else ++keyboard->xAxis; break;
-          case VK_DOWN: fallthrough
-          case 'S': if (isDown) --keyboard->yAxis; else ++keyboard->yAxis; break;
-          case VK_RIGHT: fallthrough
-          case 'D': if (isDown) ++keyboard->xAxis; else --keyboard->xAxis; break;
+          // TODO: I'm too stupid to add arrow key support without doubling the move speed if you press both @ same time
+          case 'W': if (isDown) keyboard->yAxis++; else keyboard->yAxis--; break;
+          case 'A': if (isDown) keyboard->xAxis--; else keyboard->xAxis++; break;
+          case 'S': if (isDown) keyboard->yAxis--; else keyboard->yAxis++; break;
+          case 'D': if (isDown) keyboard->xAxis++; else keyboard->xAxis--; break;
 
           case 'Q': Win32ProcessInput(&oldKeyboard->primary, &oldKeyboard->primary, isDown); break;
           case 'E': Win32ProcessInput(&oldKeyboard->secondary, &oldKeyboard->secondary, isDown); break;
@@ -137,6 +141,7 @@ Win32WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
           case 'T': Win32ProcessInput(&oldKeyboard->quaternary, &oldKeyboard->quaternary, isDown); break;
         }
       }
+
       return 0;
     }
   }
@@ -145,10 +150,11 @@ Win32WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 }
 
 function b32
-Win32GetGameHandle(Win32GameHandle *result, String8 dllPath)
+Win32GetGameHandle(Win32GameHandle *result, String8 dllPath, String8 dllTempPath)
 {
   b32 valid = 0;
-  result->handle = LoadLibrary((LPCSTR)dllPath.str);
+  Win32CopyFile((char*)dllPath.str, (char*)dllTempPath.str);
+  result->handle = LoadLibrary((LPCSTR)dllTempPath.str);
   result->lastWriteTime = Win32GetLastWriteTime(dllPath);
   if (result->handle) {
     #define X(ret, name, ...) \
@@ -165,21 +171,23 @@ function void
 Win32ReleaseGameHandle(Win32GameHandle *handle)
 {
   FreeLibrary(handle->handle);
+  MemoryZero(handle, sizeof(Win32GameHandle));
 }
 
 function b32
-Win32Init(HINSTANCE hInstance, int nCmdShow)
+Win32Init(Arena *arena, HINSTANCE hInstance, int nCmdShow)
 {
   // Create main window
   read_only char *wndClassName = "Main Window Class";
   WNDCLASS wndClass = {0};
+  wndClass.hCursor = LoadCursor(NULL, IDC_ARROW);
   wndClass.lpfnWndProc = Win32WindowProc;
   wndClass.hInstance = hInstance;
   wndClass.style = CS_OWNDC;
   wndClass.lpszClassName = wndClassName;
   RegisterClass(&wndClass);
 
-  RECT dim = {0, 0, 800, 600};
+  RECT dim = {0, 0, 1280, 720};
   RECT dimCpy = dim;
   AdjustWindowRect(&dim, 0, false);
 
@@ -200,6 +208,11 @@ Win32Init(HINSTANCE hInstance, int nCmdShow)
   globalState.dc = GetDC(globalState.window.handle);
 
   if (globalState.window.handle) {
+    // Obtain performance frequency
+    LARGE_INTEGER perfFrequency;
+    QueryPerformanceFrequency(&perfFrequency);
+    globalState.perfFrequency = perfFrequency.QuadPart;
+
     // Create OpenGL context
     PIXELFORMATDESCRIPTOR pfd = {0};
     pfd.nSize = sizeof(PIXELFORMATDESCRIPTOR);
@@ -214,10 +227,49 @@ Win32Init(HINSTANCE hInstance, int nCmdShow)
     SetPixelFormat(globalState.dc, pfi, &pfd);
     globalState.glContext = wglCreateContext(globalState.dc);
     wglMakeCurrent(globalState.dc, globalState.glContext);
+    PFNWGLGETEXTENSIONSSTRINGARBPROC wglGetExtensionsStringARB = (PFNWGLGETEXTENSIONSSTRINGARBPROC)wglGetProcAddress("wglGetExtensionsStringARB");
+
+    // Vsync
+    b32 hasVsync = false;
+    {
+      TempArena temp = ArenaTempBegin(arena);
+      char *extBuffer = wglGetExtensionsStringARB(globalState.dc);
+      u8 splits[] = {' '};
+      String8List extList = Str8Split(temp.arena, Str8C(extBuffer), 1, splits);
+      for (String8Node *node = extList.first; node; node = node->next) {
+        if (Str8Match(node->string, Str8Lit("WGL_EXT_swap_control"), 0)) {
+          hasVsync = true;
+          break;
+        }
+      }
+      ArenaTempEnd(temp);
+    }
+    if (hasVsync) {
+      PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT = (PFNWGLSWAPINTERVALEXTPROC)wglGetProcAddress("wglSwapIntervalEXT");
+      wglSwapIntervalEXT(1);
+    } else {
+      DebugPrint(Str8Lit("This machine does not support vsync!\n"));
+    }
   }
 
   ShowWindow(globalState.window.handle, nCmdShow);
   return mainWindow != NULL;
+}
+
+typedef struct Win32ThreadInfo Win32ThreadInfo;
+struct Win32ThreadInfo
+{
+  u64 idx;
+};
+
+DWORD WINAPI
+ThreadProc(LPVOID lpParameter)
+{
+  Win32ThreadInfo *info = lpParameter;
+  Unused(info);
+  for (;;) {
+    Sleep(1000);
+  }
 }
 
 int WINAPI
@@ -225,16 +277,17 @@ WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, int nCmdSh
 {
   Unused(hPrevInstance && lpCmdLine);
 
-  if (!Win32Init(hInstance, nCmdShow)) {
-    DebugPrint(Str8Lit("Unable to initialize Win32 platform layer!\n"));
-  }
-
   u64 backingBufferSize = Gigabytes(1);
   void *backingBuffer = Win32MemReserve(backingBufferSize);
   Win32MemCommit(backingBuffer, backingBufferSize);
   Arena *platformArena = ArenaAlloc(backingBuffer, backingBufferSize);
 
+  if (!Win32Init(platformArena, hInstance, nCmdShow)) {
+    DebugPrint(Str8Lit("Unable to initialize Win32 platform layer!\n"));
+  }
+
   String8 gameDllPath = {0};
+  String8 gameTempDllPath = {0};
   {
     TempArena temp = ArenaTempBegin(platformArena);
     char filenameCStr[MAX_PATH];
@@ -243,13 +296,21 @@ WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, int nCmdSh
 
     u8 splits[] = { '\\' };
     String8List path = Str8Split(temp.arena, filename, 1, splits);
+    String8List tmpPath = Str8Split(temp.arena, filename, 1, splits);
     path.last->string = Str8Lit("game.dll");
+    tmpPath.last->string = Str8Lit("game_temp.dll");
 
     String8Join joinOpts = {0};
     joinOpts.sep = Str8Lit("\\");
     gameDllPath = Str8ListJoin(temp.arena, &path, &joinOpts);
+    gameTempDllPath = Str8ListJoin(temp.arena, &tmpPath, &joinOpts);
     ArenaTempEnd(temp);
   }
+
+  PlatformAPI platformAPI = {0};
+  #define X(ret, name, ...) platformAPI.name = name;
+  PLATFORM_VTABLE
+  #undef X
 
   GameMemory gameMemory = {0};
   gameMemory.size = Gigabytes(4); // TODO: Change?
@@ -260,13 +321,21 @@ WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, int nCmdSh
   GameInput *oldInput = &globalGameInput[1];
 
   Win32GameHandle game;
-  if (!Win32GetGameHandle(&game, gameDllPath)) {
-    DebugPrint(Str8Lit("Unable to load game code!\n"));
-  }
-  game.Load(true, gameMemory);
+  Assert(Win32GetGameHandle(&game, gameDllPath, gameTempDllPath));
+  game.Load(true, platformAPI, gameMemory);
 
+  LARGE_INTEGER lastCounter, endCounter;
+  QueryPerformanceCounter(&lastCounter);
   for (;globalGameRunning;) {
+    TempArena frameArena = ArenaTempBegin(platformArena);
     // TODO: Reload game code
+    FILETIME dllWriteTime = Win32GetLastWriteTime(gameDllPath);
+    if (CompareFileTime(&dllWriteTime, &game.lastWriteTime)) {
+      Sleep(100); // TODO: Ugly hack
+      Win32ReleaseGameHandle(&game);
+      Assert(Win32GetGameHandle(&game, gameDllPath, gameTempDllPath));
+      game.Load(false, platformAPI, gameMemory);
+    }
 
     for (MSG msg; PeekMessage(&msg, 0, 0, 0, PM_REMOVE);) {
       if (msg.message == WM_QUIT)
@@ -281,6 +350,15 @@ WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, int nCmdSh
 
     SwapBuffers(globalState.dc);
     Swap(GameInput*, newInput, oldInput);
+
+    QueryPerformanceCounter(&endCounter);
+#if 0
+    f32 elapsedMS = (f32)(endCounter.QuadPart - lastCounter.QuadPart) * 1000.f;
+    elapsedMS /= (f32)globalState.perfFrequency;
+    lastCounter = endCounter;
+    DebugPrint(PushStr8F(frameArena.arena, "ms/frame: %.02fms\n", elapsedMS)); // For some reason this value seems off...
+#endif
+    ArenaTempEnd(frameArena);
   }
 
   return 0;

@@ -36,6 +36,8 @@
 
 #include "base/base_include.c"
 
+#define PLAYER_SPEED 6
+
 #define GAME_DATA_SIZE Kilobytes(4)
 typedef struct Game Game;
 struct Game
@@ -47,19 +49,25 @@ struct Game
   // Misc
   f32 playerX, playerY;
 
+  // Platform API handles
+  PlatformAPI platform;
+
   // Sokol handles
   _sg_state_t *sgState;
   _sgp_context *sgpState;
 };
 
-StaticAssert(sizeof(Game) <= GAME_DATA_SIZE, check_game_size);
+StaticAssert(sizeof(Game) <= GAME_DATA_SIZE, check_game_struct_size);
 extern void
-Load(b32 first, GameMemory memory)
+Load(b32 first, PlatformAPI platform, GameMemory memory)
 {
   Assert(memory.mem && GAME_DATA_SIZE < memory.size);
   Game *game = (Game*)memory.mem;
+  game->platform = platform;
 
   if (first) {
+    platform.DebugPrint(Str8Lit("Game loaded (first time)!\n"));
+
     // Memory management
     u64 arenaSize = memory.size / 2; // TODO: Should we divide this differently?
     void *permArenaMemory = (u8*)memory.mem + GAME_DATA_SIZE;
@@ -81,6 +89,8 @@ Load(b32 first, GameMemory memory)
     sgp_setup(&sgpDesc);
 
   } else {
+    platform.DebugPrint(Str8Lit("Game loaded!\n"));
+
     _sg = game->sgState;
     _sgp = game->sgpState;
     // Refresh OpenGL context (it wouldn't be game development without crazy hacks)
@@ -95,8 +105,8 @@ Update(GameMemory memory, GameInput input)
   Game *gameState = (Game*)memory.mem;
   GameInputSource *keyboard = &input.sources[0];
 
-  gameState->playerX += (keyboard->xAxis * 0.5f);
-  gameState->playerY += (keyboard->yAxis * 0.5f);
+  gameState->playerX += PLAYER_SPEED * keyboard->xAxis;
+  gameState->playerY += PLAYER_SPEED * keyboard->yAxis;
 }
 
 extern void
@@ -108,7 +118,7 @@ Render(GameMemory memory, u64 frameWidth, u64 frameHeight)
   // TODO: Figure out scaling and stuff
   sgp_begin(frameWidth, frameHeight);
   sgp_viewport(0, 0, frameWidth, frameHeight);
-  sgp_project(0, 800, 600, 0);
+  sgp_project(0, frameWidth, frameHeight, 0);
 
   // Clear frame buffer
   sgp_set_color(0.1f, 0.1f, 0.1f, 1.f);
